@@ -1,0 +1,3 @@
+import 'package:ddcs_app/models/contact_inquiry.dart';
+import 'package:ddcs_app/services/supabase_service.dart';
+class ContactController { ContactController(this._service); final SupabaseService _service; Future<void> submit({required String name,required String email,required String phone,required String message}) { if(name.trim().length<2) throw ArgumentError('Please enter your name.'); if(!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email.trim())) throw ArgumentError('Please enter a valid email address.'); if(message.trim().length<10) throw ArgumentError('Please provide at least 10 characters in your message.'); return _service.submitInquiry(ContactInquiry(name:name,email:email,phone:phone,message:message)); } }
