@@ -1,0 +1,1 @@
+class CustomerReview { const CustomerReview({required this.name,required this.message,required this.rating}); final String name,message; final int rating; factory CustomerReview.fromMap(Map<String,dynamic> map)=>CustomerReview(name:map['display_name'] as String? ?? 'Customer',message:map['message'] as String? ?? '',rating:(map['rating'] as num? ?? 5).toInt()); }
