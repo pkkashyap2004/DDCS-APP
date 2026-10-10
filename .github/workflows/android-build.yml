@@ -24,6 +24,60 @@ jobs:
           cp -R /tmp/ddcs_template/android ./android
           mkdir -p assets/images
           touch assets/images/.gitkeep
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || (echo "Missing ANDROID_KEYSTORE_BASE64 secret" && exit 1)
+          test -n "$ANDROID_KEYSTORE_PASSWORD" || (echo "Missing ANDROID_KEYSTORE_PASSWORD secret" && exit 1)
+          test -n "$ANDROID_KEY_ALIAS" || (echo "Missing ANDROID_KEY_ALIAS secret" && exit 1)
+          test -n "$ANDROID_KEY_PASSWORD" || (echo "Missing ANDROID_KEY_PASSWORD secret" && exit 1)
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/ddcs-upload-key.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=ddcs-upload-key.jks
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          imports = "import java.io.FileInputStream\nimport java.util.Properties\n"
+          if "val keystoreProperties = Properties()" not in s:
+              s = imports + s
+              marker = "android {"
+              if marker not in s:
+                  raise SystemExit("Could not find android block in app/build.gradle.kts")
+              signing = '''val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+
+          '''
+              s = s.replace(marker, signing + marker, 1)
+              android_marker = "android {"
+              config = '''android {
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String
+                      keyPassword = keystoreProperties["keyPassword"] as String
+                      storeFile = file("ddcs-upload-key.jks")
+                      storePassword = keystoreProperties["storePassword"] as String
+                  }
+              }
+              buildTypes {
+                  getByName("release") {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          '''
+              s = s.replace(android_marker, config, 1)
+              p.write_text(s)
+          PY
+          keytool -list -keystore android/app/ddcs-upload-key.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
       - name: Install dependencies
         run: flutter pub get
       - name: Apply safe Dart fixes
@@ -38,6 +92,9 @@ jobs:
         run: flutter build apk --release
       - name: Build release App Bundle
         run: flutter build appbundle --release
+      - name: Verify AAB signature
+        run: |
+          jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
       - name: Upload Android release files
         uses: actions/upload-artifact@v4
         with:
@@ -47,3 +104,7 @@ jobs:
             build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
+      - name: Remove signing material
+        if: always()
+        run: |
+          rm -f android/app/ddcs-upload-key.jks android/key.properties
