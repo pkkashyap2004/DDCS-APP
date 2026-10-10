@@ -1,0 +1,13 @@
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.env
+.env.*
+!.env.example
+android/local.properties
+ios/Flutter/Generated.xcconfig
+ios/Runner/GoogleService-Info.plist
+android/app/google-services.json
+coverage/
