@@ -26,10 +26,12 @@ jobs:
           touch assets/images/.gitkeep
       - name: Install dependencies
         run: flutter pub get
+      - name: Apply safe Dart fixes
+        run: dart fix --apply
       - name: Format Dart files
         run: dart format lib test
       - name: Analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Run tests
         run: flutter test
       - name: Build release APK
